@@ -149,7 +149,45 @@ function showMainApp() {
     }
     
     showView('exercises');
+    loadFilterValues();
     loadExercises();
+}
+
+// ===== ŁADOWANIE WARTOŚCI FILTRÓW =====
+async function loadFilterValues() {
+    try {
+        const res = await fetch('/api/exercises/filters/values');
+        const data = await res.json();
+        
+        // Wypełnij select poziomów w odpowiedniej kolejności
+        const levelFilter = document.getElementById('level-filter');
+        levelFilter.innerHTML = '<option value="">Wszystkie poziomy</option>';
+        
+        // Sortuj poziomy w poprawnej kolejności: beginner, intermediate, expert
+        const levelOrder = { 'beginner': 1, 'intermediate': 2, 'expert': 3 };
+        const sortedLevels = data.levels.sort((a, b) => {
+            return (levelOrder[a] || 999) - (levelOrder[b] || 999);
+        });
+        
+        sortedLevels.forEach(level => {
+            const option = document.createElement('option');
+            option.value = level;
+            option.textContent = getLevelLabel(level);
+            levelFilter.appendChild(option);
+        });
+        
+        // Wypełnij select sprzętu
+        const equipmentFilter = document.getElementById('equipment-filter');
+        equipmentFilter.innerHTML = '<option value="">Cały sprzęt</option>';
+        data.equipment.forEach(eq => {
+            const option = document.createElement('option');
+            option.value = eq;
+            option.textContent = getEquipmentLabel(eq);
+            equipmentFilter.appendChild(option);
+        });
+    } catch (e) {
+        // Błąd ładowania filtrów
+    }
 }
 
 // ===== ZARZĄDZANIE WIDOKAMI =====
@@ -238,7 +276,7 @@ function displayExercises(exercises) {
                 <h3>${ex.name}</h3>
                 <div class="card-tags">
                     <span class="tag tag-level">${getLevelLabel(ex.level)}</span>
-                    <span class="tag tag-equipment">${ex.equipment}</span>
+                    <span class="tag tag-equipment">${getEquipmentLabel(ex.equipment)}</span>
                 </div>
                 <button onclick="addToCart('${ex.id}')" class="btn-add">
                     <i class="fas fa-plus"></i> Dodaj do planu
@@ -250,11 +288,34 @@ function displayExercises(exercises) {
 
 function getLevelLabel(level) {
     const labels = {
+        'beginner': '🟢 Początkujący',
+        'intermediate': '🟡 Średniozaawansowany',
+        'expert': '🔴 Ekspert',
+        // Kompatybilność z wielkimi literami
         'Beginner': '🟢 Początkujący',
-        'Intermediate': '🟡 Średni',
+        'Intermediate': '🟡 Średniozaawansowany',
         'Expert': '🔴 Ekspert'
     };
     return labels[level] || level;
+}
+
+function getEquipmentLabel(equipment) {
+    const labels = {
+        'Body Only': 'Bez sprzętu',
+        'body only': 'Bez sprzętu',
+        'bands': 'Gumy',
+        'barbell': 'Sztanga',
+        'cable': 'Wyciąg',
+        'dumbbell': 'Hantle',
+        'e-z curl bar': 'Drążek EZ',
+        'exercise ball': 'Piłka',
+        'foam roll': 'Roller',
+        'kettlebells': 'Kettlebell',
+        'machine': 'Maszyna',
+        'medicine ball': 'Piłka lekarska',
+        'other': 'Inne'
+    };
+    return labels[equipment] || equipment;
 }
 
 function filterExercises() {
@@ -278,7 +339,7 @@ async function showExerciseDetails(exerciseId) {
                 
                 <div class="detail-tags">
                     <span class="tag tag-level">${getLevelLabel(exercise.level)}</span>
-                    <span class="tag tag-equipment"><i class="fas fa-dumbbell"></i> ${exercise.equipment}</span>
+                    <span class="tag tag-equipment"><i class="fas fa-dumbbell"></i> ${getEquipmentLabel(exercise.equipment)}</span>
                 </div>
                 
                 ${images.length > 0 ? `

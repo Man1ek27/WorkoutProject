@@ -28,14 +28,10 @@ db.serialize(() => {
             const hasCreatedAt = columns.some(col => col.name === 'created_at');
             
             if (!hasEmail) {
-                db.run("ALTER TABLE users ADD COLUMN email TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę email do tabeli users');
-                });
+                db.run("ALTER TABLE users ADD COLUMN email TEXT");
             }
             if (!hasCreatedAt) {
-                db.run("ALTER TABLE users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę created_at do tabeli users');
-                });
+                db.run("ALTER TABLE users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
             }
         }
     });
@@ -47,19 +43,13 @@ db.serialize(() => {
             const hasImages = columns.some(col => col.name === 'images');
             
             if (!hasSecondaryMuscles) {
-                db.run("ALTER TABLE exercises ADD COLUMN secondaryMuscles TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę secondaryMuscles do exercises');
-                });
+                db.run("ALTER TABLE exercises ADD COLUMN secondaryMuscles TEXT");
             }
             if (!hasCategory) {
-                db.run("ALTER TABLE exercises ADD COLUMN category TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę category do exercises');
-                });
+                db.run("ALTER TABLE exercises ADD COLUMN category TEXT");
             }
             if (!hasImages) {
-                db.run("ALTER TABLE exercises ADD COLUMN images TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę images do exercises');
-                });
+                db.run("ALTER TABLE exercises ADD COLUMN images TEXT");
             }
         }
     });
@@ -71,19 +61,13 @@ db.serialize(() => {
             const hasIsPublic = columns.some(col => col.name === 'is_public');
             
             if (!hasDescription) {
-                db.run("ALTER TABLE plans ADD COLUMN description TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę description do plans');
-                });
+                db.run("ALTER TABLE plans ADD COLUMN description TEXT");
             }
             if (!hasCreatedAt) {
-                db.run("ALTER TABLE plans ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę created_at do plans');
-                });
+                db.run("ALTER TABLE plans ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
             }
             if (!hasIsPublic) {
-                db.run("ALTER TABLE plans ADD COLUMN is_public INTEGER DEFAULT 0", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę is_public do plans');
-                });
+                db.run("ALTER TABLE plans ADD COLUMN is_public INTEGER DEFAULT 0");
             }
         }
     });
@@ -96,24 +80,16 @@ db.serialize(() => {
             const hasOrderIndex = columns.some(col => col.name === 'order_index');
             
             if (!hasSets) {
-                db.run("ALTER TABLE plan_items ADD COLUMN sets INTEGER DEFAULT 3", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę sets do plan_items');
-                });
+                db.run("ALTER TABLE plan_items ADD COLUMN sets INTEGER DEFAULT 3");
             }
             if (!hasReps) {
-                db.run("ALTER TABLE plan_items ADD COLUMN reps INTEGER DEFAULT 10", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę reps do plan_items');
-                });
+                db.run("ALTER TABLE plan_items ADD COLUMN reps INTEGER DEFAULT 10");
             }
             if (!hasNotes) {
-                db.run("ALTER TABLE plan_items ADD COLUMN notes TEXT", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę notes do plan_items');
-                });
+                db.run("ALTER TABLE plan_items ADD COLUMN notes TEXT");
             }
             if (!hasOrderIndex) {
-                db.run("ALTER TABLE plan_items ADD COLUMN order_index INTEGER", (err) => {
-                    if (!err) console.log('✓ Dodano kolumnę order_index do plan_items');
-                });
+                db.run("ALTER TABLE plan_items ADD COLUMN order_index INTEGER");
             }
         }
     });
@@ -256,6 +232,19 @@ app.get('/api/exercises/:id', (req, res) => {
             return res.status(404).json({ error: "Ćwiczenie nie znalezione" });
         }
         res.json(row);
+    });
+});
+
+// Pobieranie unikalnych wartości filtrów
+app.get('/api/exercises/filters/values', (req, res) => {
+    db.all("SELECT DISTINCT level FROM exercises WHERE level IS NOT NULL ORDER BY level", (err, levels) => {
+        db.all("SELECT DISTINCT equipment FROM exercises WHERE equipment IS NOT NULL ORDER BY equipment", (err2, equipment) => {
+            const result = {
+                levels: levels.map(l => l.level),
+                equipment: equipment.map(e => e.equipment)
+            };
+            res.json(result);
+        });
     });
 });
 
