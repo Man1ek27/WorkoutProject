@@ -1,42 +1,52 @@
-let currentUserRole = null;
+let cart = [];
+let userRole = '';
 
 async function login() {
     const user = document.getElementById('username').value;
     const pass = document.getElementById('password').value;
-
-    const response = await fetch('/api/login', {
+    const res = await fetch('/api/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user, password: pass })
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: user, password: pass})
     });
-
-    if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('token', data.token);
-        currentUserRole = data.role;
-        document.getElementById('auth-status').innerText = `Zalogowano jako: ${user} (${data.role})`;
-        document.getElementById('login-form').style.display = 'none';
-        loadExercises();
-    } else {
-        alert("Błąd logowania!");
-    }
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    userRole = data.role;
+    document.getElementById('auth-container').innerHTML = `Witaj ${user} (${userRole})`;
+    loadExercises();
 }
 
 async function loadExercises() {
-    const response = await fetch('/api/exercises');
-    const data = await response.json();
+    const res = await fetch('/api/exercises');
+    const exercises = await res.json();
     const container = document.getElementById('exercise-list');
-    container.innerHTML = '';
-
-    data.forEach(ex => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
+    container.innerHTML = exercises.map(ex => `
+        <div class="card">
+            <img src="/images/${ex.mainImage}" alt="${ex.name}" onerror="this.src='https://via.placeholder.com/150'">
             <h3>${ex.name}</h3>
-            <p>Partia: ${ex.bodyPart}</p>
-            <p>Cel: ${ex.target}</p>
-            ${currentUserRole === 'admin' ? '<button class="btn-delete">Usuń (Admin)</button>' : ''}
-        `;
-        container.appendChild(card);
+            <p><strong>Poziom:</strong> ${ex.level}</p>
+            <p><strong>Sprzęt:</strong> ${ex.equipment}</p>
+            <button onclick="addToPlan('${ex.id}')">Dodaj do planu</button>
+        </div>
+    `).join('');
+}
+
+function addToPlan(id) {
+    cart.push(id);
+    alert(`Dodano do planu. Masz już: ${cart.length} ćwiczeń.`);
+}
+
+async function savePlan() {
+    const name = prompt("Podaj nazwę planu:");
+    if(!name) return;
+    await fetch('/api/plans', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ name, exercises: cart })
     });
+    alert("Plan zapisany!");
+    cart = [];
 }
