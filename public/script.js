@@ -1,10 +1,8 @@
-// Stan aplikacji
 let currentUser = null;
 let cart = [];
 let allExercises = [];
 let currentView = 'auth';
 
-// ===== INICJALIZACJA =====
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
@@ -22,7 +20,7 @@ function checkAuth() {
     }
 }
 
-// ===== SYSTEM POWIADOMIEŃ =====
+// SYSTEM POWIADOMIEŃ
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -49,7 +47,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// ===== AUTORYZACJA =====
+// AUTORYZACJA
 function toggleAuthForm() {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
@@ -153,17 +151,15 @@ function showMainApp() {
     loadExercises();
 }
 
-// ===== ŁADOWANIE WARTOŚCI FILTRÓW =====
+// FILTRY
 async function loadFilterValues() {
     try {
         const res = await fetch('/api/exercises/filters/values');
         const data = await res.json();
         
-        // Wypełnij select poziomów w odpowiedniej kolejności
         const levelFilter = document.getElementById('level-filter');
         levelFilter.innerHTML = '<option value="">Wszystkie poziomy</option>';
         
-        // Sortuj poziomy w poprawnej kolejności: beginner, intermediate, expert
         const levelOrder = { 'beginner': 1, 'intermediate': 2, 'expert': 3 };
         const sortedLevels = data.levels.sort((a, b) => {
             return (levelOrder[a] || 999) - (levelOrder[b] || 999);
@@ -176,7 +172,6 @@ async function loadFilterValues() {
             levelFilter.appendChild(option);
         });
         
-        // Wypełnij select sprzętu
         const equipmentFilter = document.getElementById('equipment-filter');
         equipmentFilter.innerHTML = '<option value="">Cały sprzęt</option>';
         data.equipment.forEach(eq => {
@@ -186,11 +181,11 @@ async function loadFilterValues() {
             equipmentFilter.appendChild(option);
         });
     } catch (e) {
-        // Błąd ładowania filtrów
+        showToast('Błąd podczas ładowania filtrów', 'error');
     }
 }
 
-// ===== ZARZĄDZANIE WIDOKAMI =====
+// WiDOKI
 function showView(viewName) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -210,14 +205,12 @@ function showView(viewName) {
         viewElement.classList.add('active');
         currentView = viewName;
         
-        // Aktywuj odpowiedni link w nav
         document.querySelectorAll('.nav-link').forEach(link => {
             if (link.getAttribute('onclick')?.includes(viewName)) {
                 link.classList.add('active');
             }
         });
         
-        // Załaduj dane dla widoku
         if (viewName === 'exercises') loadExercises();
         if (viewName === 'my-plans') loadMyPlans();
         if (viewName === 'create-plan') updateCartDisplay();
@@ -225,7 +218,7 @@ function showView(viewName) {
     }
 }
 
-// ===== ĆWICZENIA =====
+// ĆWICZENIA
 async function loadExercises() {
     const container = document.getElementById('exercise-list');
     const loading = document.getElementById('loading');
@@ -291,7 +284,6 @@ function getLevelLabel(level) {
         'beginner': '🟢 Początkujący',
         'intermediate': '🟡 Średniozaawansowany',
         'expert': '🔴 Ekspert',
-        // Kompatybilność z wielkimi literami
         'Beginner': '🟢 Początkujący',
         'Intermediate': '🟡 Średniozaawansowany',
         'Expert': '🔴 Ekspert'
@@ -396,7 +388,7 @@ function closeExerciseModal() {
     document.body.style.overflow = 'auto';
 }
 
-// ===== KOSZYK I TWORZENIE PLANU =====
+// PLAN TRNINGOWY
 function addToCart(exerciseId) {
     const exercise = allExercises.find(ex => ex.id === exerciseId);
     
@@ -526,7 +518,7 @@ async function savePlan() {
     }
 }
 
-// ===== MOJE PLANY =====
+// MOJE PLANY
 async function loadMyPlans() {
     const container = document.getElementById('plans-list');
     container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Ładowanie...</div>';
@@ -645,7 +637,7 @@ async function deletePlan(planId) {
     }
 }
 
-// ===== PANEL ADMINA =====
+// PANEL ADMINA
 function showAdminTab(tab) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.admin-tab-content').forEach(content => content.style.display = 'none');
@@ -805,7 +797,7 @@ async function deleteUser(userId) {
     }
 }
 
-// ===== FUNKCJE POMOCNICZE =====
+// FUNKCJE POMOCNICZE
 function formatDate(dateString) {
     const date = new Date(dateString);
     return date.toLocaleDateString('pl-PL', { 
@@ -817,7 +809,6 @@ function formatDate(dateString) {
     });
 }
 
-// Zamykanie modali po kliknięciu w tło
 window.onclick = function(event) {
     const exerciseModal = document.getElementById('exercise-modal');
     const planModal = document.getElementById('plan-modal');

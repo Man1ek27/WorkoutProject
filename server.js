@@ -9,19 +9,16 @@ const app = express();
 const SECRET = "twoj_klucz_2026";
 app.use(express.json());
 app.use(express.static('public'));
-// Serwowanie zdjęć ćwiczeń z folderu data/exercises
 app.use('/images', express.static(path.join(__dirname, 'data', 'exercises')));
 
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
-    // Rozszerzone tabele z dodatkowymi polami
     db.run("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, email TEXT, role TEXT DEFAULT 'user', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
     db.run("CREATE TABLE IF NOT EXISTS exercises (id TEXT PRIMARY KEY, name TEXT, level TEXT, equipment TEXT, primaryMuscles TEXT, secondaryMuscles TEXT, instructions TEXT, category TEXT, images TEXT, mainImage TEXT)");
     db.run("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, user_id INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, is_public INTEGER DEFAULT 0)");
     db.run("CREATE TABLE IF NOT EXISTS plan_items (id INTEGER PRIMARY KEY AUTOINCREMENT, plan_id INTEGER, exercise_id TEXT, sets INTEGER DEFAULT 3, reps INTEGER DEFAULT 10, notes TEXT, order_index INTEGER)");
 
-    // Migracja - dodanie brakujących kolumn do istniejącej bazy
     db.all("PRAGMA table_info(users)", (err, columns) => {
         if (!err && columns) {
             const hasEmail = columns.some(col => col.name === 'email');
@@ -94,7 +91,6 @@ db.serialize(() => {
         }
     });
 
-    // Tworzenie domyślnego admina jeśli nie istnieje
     db.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'", (err, row) => {
         if (row && row.count === 0) {
             const hashedPassword = bcrypt.hashSync('admin123', 10);
@@ -103,7 +99,6 @@ db.serialize(() => {
         }
     });
 
-    // Import danych z JSON z rozszerzonymi polami
     db.get("SELECT COUNT(*) as count FROM exercises", (err, row) => {
         if (row && row.count === 0) {
             const data = JSON.parse(fs.readFileSync('./data/exercises.json', 'utf8'));
@@ -127,7 +122,6 @@ db.serialize(() => {
     });
 });
 
-// Middleware do sprawdzania tokena
 const auth = (req, res, next) => {
     try {
         const token = req.headers.authorization.split(" ")[1];
@@ -138,7 +132,6 @@ const auth = (req, res, next) => {
     }
 };
 
-// Middleware do sprawdzania roli admina
 const adminAuth = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();
@@ -147,7 +140,6 @@ const adminAuth = (req, res, next) => {
     }
 };
 
-// --- ENDPOINTY AUTORYZACJI ---
 
 // Rejestracja nowego użytkownika
 app.post('/api/register', (req, res) => {
@@ -189,9 +181,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// --- ENDPOINTY ĆWICZEŃ ---
 
-// Pobieranie wszystkich ćwiczeń z filtrowaniem i paginacją
 app.get('/api/exercises', (req, res) => {
     const { limit = 50, offset = 0, level, equipment, muscle, search } = req.query;
     let query = "SELECT * FROM exercises WHERE 1=1";
@@ -225,7 +215,6 @@ app.get('/api/exercises', (req, res) => {
     });
 });
 
-// Pobieranie szczegółów pojedynczego ćwiczenia
 app.get('/api/exercises/:id', (req, res) => {
     db.get("SELECT * FROM exercises WHERE id = ?", [req.params.id], (err, row) => {
         if (err || !row) {
@@ -235,7 +224,6 @@ app.get('/api/exercises/:id', (req, res) => {
     });
 });
 
-// Pobieranie unikalnych wartości filtrów
 app.get('/api/exercises/filters/values', (req, res) => {
     db.all("SELECT DISTINCT level FROM exercises WHERE level IS NOT NULL ORDER BY level", (err, levels) => {
         db.all("SELECT DISTINCT equipment FROM exercises WHERE equipment IS NOT NULL ORDER BY equipment", (err2, equipment) => {
@@ -248,9 +236,7 @@ app.get('/api/exercises/filters/values', (req, res) => {
     });
 });
 
-// --- ENDPOINTY PLANÓW ---
 
-// Tworzenie nowego planu
 app.post('/api/plans', auth, (req, res) => {
     const { name, description, exercises } = req.body;
     
@@ -330,9 +316,8 @@ app.delete('/api/plans/:id', auth, (req, res) => {
     );
 });
 
-// --- ENDPOINTY ADMINA ---
 
-// Pobieranie wszystkich użytkowników (tylko admin)
+// Panel admina
 app.get('/api/admin/users', auth, adminAuth, (req, res) => {
     db.all("SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC", 
         (err, rows) => {
@@ -344,7 +329,6 @@ app.get('/api/admin/users', auth, adminAuth, (req, res) => {
     );
 });
 
-// Usuwanie użytkownika (tylko admin)
 app.delete('/api/admin/users/:id', auth, adminAuth, (req, res) => {
     db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err) {
         if (err) {
@@ -354,7 +338,6 @@ app.delete('/api/admin/users/:id', auth, adminAuth, (req, res) => {
     });
 });
 
-// Pobieranie wszystkich planów (tylko admin)
 app.get('/api/admin/plans', auth, adminAuth, (req, res) => {
     db.all(`
         SELECT p.*, u.username 
@@ -369,7 +352,6 @@ app.get('/api/admin/plans', auth, adminAuth, (req, res) => {
     });
 });
 
-// Zmiana roli użytkownika (tylko admin)
 app.patch('/api/admin/users/:id/role', auth, adminAuth, (req, res) => {
     const { role } = req.body;
     
