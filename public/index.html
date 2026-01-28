@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Planner - Twoje Treningi</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Aplikacja Treningowa</h1>
+        <div id="auth-container">
+            <div id="login-form">
+                <input type="text" id="username" placeholder="Login (admin/user)">
+                <input type="password" id="password" placeholder="Hasło">
+                <button onclick="login()">Zaloguj się</button>
+            </div>
+            <p id="auth-status"></p>
+        </div>
+    </header>
+
+    <main>
+        <section id="exercises-section">
+            <h2>Katalog ćwiczeń</h2>
+            <div id="exercise-list">
+                </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Projekt zaliczeniowy</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
