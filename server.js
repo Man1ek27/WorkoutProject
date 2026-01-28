@@ -1,6 +1,7 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const app = express();
@@ -14,26 +15,38 @@ app.use('/images', express.static(path.join(__dirname, 'data', 'exercises')));
 const db = new sqlite3.Database('./database.db');
 
 db.serialize(() => {
-    // Rozszerzone tabele
-    db.run("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, role TEXT)");
-    db.run("CREATE TABLE IF NOT EXISTS exercises (id TEXT PRIMARY KEY, name TEXT, level TEXT, equipment TEXT, primaryMuscles TEXT, instructions TEXT, mainImage TEXT)");
-    db.run("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, user_id INTEGER)");
-    db.run("CREATE TABLE IF NOT EXISTS plan_items (id INTEGER PRIMARY KEY AUTOINCREMENT, plan_id INTEGER, exercise_id TEXT)");
+    // Rozszerzone tabele z dodatkowymi polami
+    db.run("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, email TEXT, role TEXT DEFAULT 'user', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+    db.run("CREATE TABLE IF NOT EXISTS exercises (id TEXT PRIMARY KEY, name TEXT, level TEXT, equipment TEXT, primaryMuscles TEXT, secondaryMuscles TEXT, instructions TEXT, category TEXT, images TEXT, mainImage TEXT)");
+    db.run("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, user_id INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, is_public INTEGER DEFAULT 0)");
+    db.run("CREATE TABLE IF NOT EXISTS plan_items (id INTEGER PRIMARY KEY AUTOINCREMENT, plan_id INTEGER, exercise_id TEXT, sets INTEGER DEFAULT 3, reps INTEGER DEFAULT 10, notes TEXT, order_index INTEGER)");
 
-    // Import danych z JSON (poprawione mapowanie pól)
+    // Tworzenie domyślnego admina jeśli nie istnieje
+    db.get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'", (err, row) => {
+        if (row && row.count === 0) {
+            const hashedPassword = bcrypt.hashSync('admin123', 10);
+            db.run("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)", 
+                ['admin', hashedPassword, 'admin@workout.pl', 'admin']);
+        }
+    });
+
+    // Import danych z JSON z rozszerzonymi polami
     db.get("SELECT COUNT(*) as count FROM exercises", (err, row) => {
         if (row && row.count === 0) {
             const data = JSON.parse(fs.readFileSync('./data/exercises.json', 'utf8'));
-            const stmt = db.prepare("INSERT INTO exercises VALUES (?, ?, ?, ?, ?, ?, ?)");
+            const stmt = db.prepare("INSERT INTO exercises VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             data.forEach(ex => {
                 stmt.run(
                     ex.id, 
                     ex.name, 
-                    ex.level, 
-                    ex.equipment, 
-                    JSON.stringify(ex.primaryMuscles), 
-                    JSON.stringify(ex.instructions),
-                    ex.images[0] // Pierwsze zdjęcie jako główne
+                    ex.level || 'Intermediate', 
+                    ex.equipment || 'Body Only', 
+                    JSON.stringify(ex.primaryMuscles || []), 
+                    JSON.stringify(ex.secondaryMuscles || []),
+                    JSON.stringify(ex.instructions || []),
+                    ex.category || 'Strength',
+                    JSON.stringify(ex.images || []),
+                    ex.images && ex.images[0] ? ex.images[0] : 'placeholder.jpg'
                 );
             });
             stmt.finalize();
@@ -47,31 +60,244 @@ const auth = (req, res, next) => {
         const token = req.headers.authorization.split(" ")[1];
         req.user = jwt.verify(token, SECRET);
         next();
-    } catch (e) { res.status(401).send("Brak autoryzacji"); }
+    } catch (e) { 
+        res.status(401).json({ error: "Brak autoryzacji" }); 
+    }
 };
 
-// --- ENDPOINTY ---
+// Middleware do sprawdzania roli admina
+const adminAuth = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        res.status(403).json({ error: "Brak uprawnień administratora" });
+    }
+};
+
+// --- ENDPOINTY AUTORYZACJI ---
+
+// Rejestracja nowego użytkownika
+app.post('/api/register', (req, res) => {
+    const { username, password, email } = req.body;
+    
+    if (!username || !password || !email) {
+        return res.status(400).json({ error: "Wszystkie pola są wymagane" });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    db.run("INSERT INTO users (username, password, email, role) VALUES (?, ?, ?, ?)", 
+        [username, hashedPassword, email, 'user'], 
+        function(err) {
+            if (err) {
+                return res.status(400).json({ error: "Użytkownik już istnieje" });
+            }
+            const token = jwt.sign({ username, role: 'user', id: this.lastID }, SECRET);
+            res.json({ success: true, token, role: 'user', userId: this.lastID, username });
+        }
+    );
+});
+
+// Logowanie użytkownika
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    const role = username === 'admin' ? 'admin' : 'user';
-    const token = jwt.sign({ username, role, id: 1 }, SECRET);
-    res.json({ token, role });
+    
+    db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
+        if (err || !user) {
+            return res.status(401).json({ error: "Nieprawidłowy login lub hasło" });
+        }
+        
+        if (bcrypt.compareSync(password, user.password)) {
+            const token = jwt.sign({ username: user.username, role: user.role, id: user.id }, SECRET);
+            res.json({ token, role: user.role, userId: user.id, username: user.username });
+        } else {
+            res.status(401).json({ error: "Nieprawidłowy login lub hasło" });
+        }
+    });
 });
 
+// --- ENDPOINTY ĆWICZEŃ ---
+
+// Pobieranie wszystkich ćwiczeń z filtrowaniem i paginacją
 app.get('/api/exercises', (req, res) => {
-    db.all("SELECT * FROM exercises LIMIT 50", (err, rows) => res.json(rows));
+    const { limit = 50, offset = 0, level, equipment, muscle, search } = req.query;
+    let query = "SELECT * FROM exercises WHERE 1=1";
+    const params = [];
+    
+    if (level) {
+        query += " AND level = ?";
+        params.push(level);
+    }
+    if (equipment) {
+        query += " AND equipment = ?";
+        params.push(equipment);
+    }
+    if (muscle) {
+        query += " AND (primaryMuscles LIKE ? OR secondaryMuscles LIKE ?)";
+        params.push(`%${muscle}%`, `%${muscle}%`);
+    }
+    if (search) {
+        query += " AND name LIKE ?";
+        params.push(`%${search}%`);
+    }
+    
+    query += " LIMIT ? OFFSET ?";
+    params.push(parseInt(limit), parseInt(offset));
+    
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Błąd serwera" });
+        }
+        res.json(rows);
+    });
 });
 
-// Tworzenie planu
+// Pobieranie szczegółów pojedynczego ćwiczenia
+app.get('/api/exercises/:id', (req, res) => {
+    db.get("SELECT * FROM exercises WHERE id = ?", [req.params.id], (err, row) => {
+        if (err || !row) {
+            return res.status(404).json({ error: "Ćwiczenie nie znalezione" });
+        }
+        res.json(row);
+    });
+});
+
+// --- ENDPOINTY PLANÓW ---
+
+// Tworzenie nowego planu
 app.post('/api/plans', auth, (req, res) => {
-    const { name, exercises } = req.body;
-    db.run("INSERT INTO plans (name, user_id) VALUES (?, ?)", [name, 1], function(err) {
-        const planId = this.lastID;
-        exercises.forEach(exId => {
-            db.run("INSERT INTO plan_items (plan_id, exercise_id) VALUES (?, ?)", [planId, exId]);
-        });
+    const { name, description, exercises } = req.body;
+    
+    db.run("INSERT INTO plans (name, description, user_id) VALUES (?, ?, ?)", 
+        [name, description || '', req.user.id], 
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: "Błąd podczas tworzenia planu" });
+            }
+            
+            const planId = this.lastID;
+            
+            if (exercises && exercises.length > 0) {
+                const stmt = db.prepare("INSERT INTO plan_items (plan_id, exercise_id, sets, reps, notes, order_index) VALUES (?, ?, ?, ?, ?, ?)");
+                exercises.forEach((ex, index) => {
+                    stmt.run(planId, ex.id || ex, ex.sets || 3, ex.reps || 10, ex.notes || '', index);
+                });
+                stmt.finalize();
+            }
+            
+            res.json({ success: true, planId });
+        }
+    );
+});
+
+// Pobieranie planów użytkownika
+app.get('/api/plans', auth, (req, res) => {
+    db.all("SELECT * FROM plans WHERE user_id = ? ORDER BY created_at DESC", 
+        [req.user.id], 
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({ error: "Błąd serwera" });
+            }
+            res.json(rows);
+        }
+    );
+});
+
+// Pobieranie szczegółów planu z ćwiczeniami
+app.get('/api/plans/:id', auth, (req, res) => {
+    const planId = req.params.id;
+    
+    db.get("SELECT * FROM plans WHERE id = ? AND user_id = ?", 
+        [planId, req.user.id], 
+        (err, plan) => {
+            if (err || !plan) {
+                return res.status(404).json({ error: "Plan nie znaleziony" });
+            }
+            
+            db.all(`
+                SELECT pi.*, e.name, e.level, e.equipment, e.mainImage 
+                FROM plan_items pi 
+                JOIN exercises e ON pi.exercise_id = e.id 
+                WHERE pi.plan_id = ? 
+                ORDER BY pi.order_index
+            `, [planId], (err, items) => {
+                if (err) {
+                    return res.status(500).json({ error: "Błąd serwera" });
+                }
+                res.json({ ...plan, exercises: items });
+            });
+        }
+    );
+});
+
+// Usuwanie planu
+app.delete('/api/plans/:id', auth, (req, res) => {
+    db.run("DELETE FROM plans WHERE id = ? AND user_id = ?", 
+        [req.params.id, req.user.id], 
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: "Błąd serwera" });
+            }
+            db.run("DELETE FROM plan_items WHERE plan_id = ?", [req.params.id]);
+            res.json({ success: true });
+        }
+    );
+});
+
+// --- ENDPOINTY ADMINA ---
+
+// Pobieranie wszystkich użytkowników (tylko admin)
+app.get('/api/admin/users', auth, adminAuth, (req, res) => {
+    db.all("SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC", 
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({ error: "Błąd serwera" });
+            }
+            res.json(rows);
+        }
+    );
+});
+
+// Usuwanie użytkownika (tylko admin)
+app.delete('/api/admin/users/:id', auth, adminAuth, (req, res) => {
+    db.run("DELETE FROM users WHERE id = ?", [req.params.id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: "Błąd serwera" });
+        }
         res.json({ success: true });
     });
 });
 
-app.listen(process.env.PORT || 3000);
+// Pobieranie wszystkich planów (tylko admin)
+app.get('/api/admin/plans', auth, adminAuth, (req, res) => {
+    db.all(`
+        SELECT p.*, u.username 
+        FROM plans p 
+        JOIN users u ON p.user_id = u.id 
+        ORDER BY p.created_at DESC
+    `, (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: "Błąd serwera" });
+        }
+        res.json(rows);
+    });
+});
+
+// Zmiana roli użytkownika (tylko admin)
+app.patch('/api/admin/users/:id/role', auth, adminAuth, (req, res) => {
+    const { role } = req.body;
+    
+    db.run("UPDATE users SET role = ? WHERE id = ?", 
+        [role, req.params.id], 
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: "Błąd serwera" });
+            }
+            res.json({ success: true });
+        }
+    );
+});
+
+app.listen(process.env.PORT || 3000, () => {
+    console.log('🚀 Serwer działa na porcie', process.env.PORT || 3000);
+});

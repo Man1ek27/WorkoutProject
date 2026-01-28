@@ -3,35 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workout Planner - Twoje Treningi</title>
+    <title>FitFlow - Profesjonalny Planer Treningowy</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <header>
-        <h1>Aplikacja Treningowa</h1>
-        <div id="auth-container">
-            <div id="login-form">
-                <input type="text" id="username" placeholder="Login (admin/user)">
-                <input type="password" id="password" placeholder="Hasło">
-                <button onclick="login()">Zaloguj się</button>
-            </div>
-            <p id="auth-status"></p>
-        </div>
-    </header>
+    <!-- Notyfikacje Toast -->
+    <div id="toast-container"></div>
 
-    <main>
-        <section id="exercises-section">
-            <h2>Katalog ćwiczeń</h2>
-            <div id="exercise-list">
-                </div>
-            <div id="plan-actions" style="margin: 20px;">
-                <button onclick="savePlan()" style="background: #e94560;">Zapisz mój nowy plan</button>
+    <!-- Nawigacja -->
+    <nav id="navbar" style="display: none;">
+        <div class="nav-brand">
+            <i class="fas fa-dumbbell"></i>
+            <span>FitFlow</span>
+        </div>
+        <div class="nav-links">
+            <a href="#" onclick="showView('exercises')" class="nav-link active">
+                <i class="fas fa-list"></i> Ćwiczenia
+            </a>
+            <a href="#" onclick="showView('my-plans')" class="nav-link">
+                <i class="fas fa-calendar-alt"></i> Moje Plany
+            </a>
+            <a href="#" onclick="showView('create-plan')" class="nav-link">
+                <i class="fas fa-plus-circle"></i> Nowy Plan
+            </a>
+            <a href="#" onclick="showView('admin')" class="nav-link admin-only" style="display: none;">
+                <i class="fas fa-crown"></i> Admin Panel
+            </a>
+        </div>
+        <div class="nav-user">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span id="user-name"></span>
             </div>
-        </section>
-    </main>
+            <button onclick="logout()" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Wyloguj
+            </button>
+        </div>
+    </nav>
+
+    <!-- Widok Logowania/Rejestracji -->
+    <div id="auth-view" class="view active">
+        <div class="auth-container">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <i class="fas fa-dumbbell"></i>
+                    <h1>FitFlow</h1>
+                    <p>Twój osobisty planer treningowy</p>
+                </div>
+
+                <!-- Formularz Logowania -->
+                <div id="login-form" class="auth-form">
+                    <h2>Zaloguj się</h2>
+                    <div class="form-group">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="login-username" placeholder="Nazwa użytkownika">
+                    </div>
+                    <div class="form-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="login-password" placeholder="Hasło">
+                    </div>
+                    <button onclick="login()" class="btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Zaloguj się
+                    </button>
+                    <p class="auth-switch">
+                        Nie masz konta? <a href="#" onclick="toggleAuthForm()">Zarejestruj się</a>
+                    </p>
+                </div>
+
+                <!-- Formularz Rejestracji -->
+                <div id="register-form" class="auth-form" style="display: none;">
+                    <h2>Załóż konto</h2>
+                    <div class="form-group">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="register-username" placeholder="Nazwa użytkownika">
+                    </div>
+                    <div class="form-group">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="register-email" placeholder="Email">
+                    </div>
+                    <div class="form-group">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="register-password" placeholder="Hasło">
+                    </div>
+                    <button onclick="register()" class="btn-primary">
+                        <i class="fas fa-user-plus"></i> Zarejestruj się
+                    </button>
+                    <p class="auth-switch">
+                        Masz już konto? <a href="#" onclick="toggleAuthForm()">Zaloguj się</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widok Katalogu Ćwiczeń -->
+    <div id="exercises-view" class="view">
+        <div class="container">
+            <div class="view-header">
+                <h2><i class="fas fa-list"></i> Katalog Ćwiczeń</h2>
+                <div class="search-filters">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="search-input" placeholder="Szukaj ćwiczeń..." onkeyup="filterExercises()">
+                    </div>
+                    <select id="level-filter" onchange="filterExercises()">
+                        <option value="">Wszystkie poziomy</option>
+                        <option value="Beginner">Początkujący</option>
+                        <option value="Intermediate">Średnio zaawansowany</option>
+                        <option value="Expert">Ekspert</option>
+                    </select>
+                    <select id="equipment-filter" onchange="filterExercises()">
+                        <option value="">Wszystkie sprzęty</option>
+                        <option value="Body Only">Bez sprzętu</option>
+                        <option value="Barbell">Sztanga</option>
+                        <option value="Dumbbell">Hantle</option>
+                        <option value="Machine">Maszyna</option>
+                        <option value="Cable">Wyciąg</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="exercise-list" class="exercise-grid"></div>
+            <div id="loading" class="loading" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> Ładowanie...
+            </div>
+        </div>
+    </div>
+
+    <!-- Widok Moich Planów -->
+    <div id="my-plans-view" class="view">
+        <div class="container">
+            <div class="view-header">
+                <h2><i class="fas fa-calendar-alt"></i> Moje Plany Treningowe</h2>
+            </div>
+            <div id="plans-list" class="plans-grid"></div>
+        </div>
+    </div>
+
+    <!-- Widok Tworzenia Planu -->
+    <div id="create-plan-view" class="view">
+        <div class="container">
+            <div class="view-header">
+                <h2><i class="fas fa-plus-circle"></i> Tworzenie Nowego Planu</h2>
+            </div>
+            
+            <div class="plan-creator">
+                <div class="plan-info-section">
+                    <h3>Informacje o planie</h3>
+                    <div class="form-group">
+                        <label>Nazwa planu</label>
+                        <input type="text" id="plan-name" placeholder="np. Plan na masę">
+                    </div>
+                    <div class="form-group">
+                        <label>Opis</label>
+                        <textarea id="plan-description" placeholder="Opisz swój plan treningowy..."></textarea>
+                    </div>
+                </div>
+
+                <div class="plan-exercises-section">
+                    <h3>Wybrane ćwiczenia (<span id="cart-count">0</span>)</h3>
+                    <div id="cart-exercises" class="cart-list"></div>
+                </div>
+
+                <button onclick="savePlan()" class="btn-save-plan">
+                    <i class="fas fa-save"></i> Zapisz Plan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widok Admina -->
+    <div id="admin-view" class="view">
+        <div class="container">
+            <div class="view-header">
+                <h2><i class="fas fa-crown"></i> Panel Administratora</h2>
+            </div>
+            
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="showAdminTab('users')">
+                    <i class="fas fa-users"></i> Użytkownicy
+                </button>
+                <button class="tab-btn" onclick="showAdminTab('plans')">
+                    <i class="fas fa-clipboard-list"></i> Wszystkie Plany
+                </button>
+            </div>
+
+            <div id="admin-users-tab" class="admin-tab-content">
+                <div id="users-list" class="admin-table"></div>
+            </div>
+
+            <div id="admin-plans-tab" class="admin-tab-content" style="display: none;">
+                <div id="admin-plans-list" class="admin-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Szczegółów Ćwiczenia -->
+    <div id="exercise-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeExerciseModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Modal Szczegółów Planu -->
+    <div id="plan-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closePlanModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="plan-modal-body"></div>
+        </div>
+    </div>
 
     <footer>
-        <p>&copy; 2026 Projekt zaliczeniowy</p>
+        <p>&copy; 2026 FitFlow - Profesjonalny Planer Treningowy</p>
     </footer>
 
     <script src="script.js"></script>
